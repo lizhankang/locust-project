@@ -1,0 +1,21 @@
+[tool.locust]
+#locustfile = "single_api_pressure/openapi/ipay.py"
+#locustfile = "single_api_pressure/cashier/order_detail.py"
+locustfile = "demo/task_sets/order_sn2.py"
+#locustfile = "scene_pressure/wx_pay.py"
+headless = false
+#master = true
+expect-workers = 10
+#host = "https://vapi.shouqianba.com"
+#host = "https://vip-apigateway.iwosai.com"
+#host = "https://lite-pos-service.iwosai.com"
+users = 10
+spawn-rate = 1
+run-time = "100s"
+#tags = ["signature"]
+#tags = ["no_signature"]
+#exclude-tags = ["card_detail", "card_list", "order_query"]
+
+loglevel = "INFO"
+logfile = "/Users/lizhankang/workSpace/selfProject/pythonProject/locust-project/logs.txt"
+skip-log-setup = false

@@ -1,0 +1,9 @@
+/.idea/
+/.venv/
+**/__pycache__/
+*.pyc
+*.log
+log***
+**/.pytest_cache/
+**/.DS_Store
+/shouqianba/common/pem/
