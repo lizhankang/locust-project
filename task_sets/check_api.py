@@ -1,6 +1,8 @@
 import os
 from locust import HttpUser, SequentialTaskSet, task, between
 
+from common.api_utils import ApiUtils
+
 
 class CheckApiTaskSet(SequentialTaskSet):
     @task
@@ -10,21 +12,10 @@ class CheckApiTaskSet(SequentialTaskSet):
             "Content-Type": "application/json",
         }
         body = {
-            "request": {
-                "head": {
-                    "appid": "28lpm3781001",
-                    "request_time": "2024-07-04T18:24:21+08:00",
-                    "sign_type": "SHA256",
-                    "version": "1.0.0"
-                },
-                "body": {
                     "brand_code": "1024",
                     "order_sn": "7902247732621776"
                 }
-            },
-            "signature": "qwertyuiop"
-        }
-        with self.client.post(url=endpoint, headers=headers, json=body,
+        with self.client.post(url=endpoint, headers=headers, json=ApiUtils("dev").signed_body(body),
                               name='purchase'.upper(), catch_response=True) as response:
             print(f'[URL]: {response.request.url}')
             print(f'[REQUEST]: {response.request.body.decode("utf-8")}')
