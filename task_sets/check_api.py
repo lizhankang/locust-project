@@ -1,15 +1,14 @@
 import os
 from locust import HttpUser, SequentialTaskSet, task, between
-envir = "dev"
-num = 10
 
 
 class CheckApiTaskSet(SequentialTaskSet):
     @task
     def task1(self):
-        endpoint = "/api/lite-pos/test"
+        endpoint = "/check"
         headers = {
             "Content-Type": "application/json",
+            "App-Id": "28lpm3781001"
         }
         body = {
             "brand_code": "1024"
