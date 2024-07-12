@@ -46,3 +46,5 @@ zope.event==5.0
 zope.interface==6.4.post2
 
 jsonpath~=0.82.2
+pyquery~=2.0.0
+tqdm~=4.66.4

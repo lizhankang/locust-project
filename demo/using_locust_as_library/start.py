@@ -34,7 +34,7 @@ gevent.spawn(stats_printer(env.stats))
 # start a greenlet that save current stats to history
 gevent.spawn(stats_history, env.runner)
 
-# start the test
+# start the finial
 runner.start(1, spawn_rate=10)
 
 # in 30 seconds stop the runner

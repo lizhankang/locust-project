@@ -1,4 +1,4 @@
-# This locust test script example will simulate a user
+# This locust finial script example will simulate a user
 # browsing the Locust documentation on https://docs.locust.io/
 
 from locust import HttpUser, SequentialTaskSet, between, task
