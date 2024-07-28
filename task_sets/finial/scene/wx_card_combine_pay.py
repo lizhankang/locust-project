@@ -7,7 +7,7 @@ import time
 import jsonpath
 import requests
 from locust.env import Environment
-from locust import HttpUser, SequentialTaskSet, task, events
+from locust import HttpUser, SequentialTaskSet, task, events, LoadTestShape
 from tqdm import tqdm
 
 from common.auth_utils import AuthUtils
@@ -18,7 +18,7 @@ dev_info = {
     "store_sn": "LPK001",
     }
 prod_info = {
-    "host": "https://vip-apigateway.iwosai.com",
+    "host": "https://vapi.shouqianba.com",
     "brand_code": "999888",
     "store_sn": "LPK001",
 }
@@ -26,14 +26,7 @@ prod_info = {
 
 class WxAndCardPayTaskSet(SequentialTaskSet):
     def on_start(self):
-        # dev_info = {
-        #     "brand_code": "1024",
-        #     "store_sn": "LPK001",
-        # }
-        # prod_info = {
-        #     "brand_code": "999888",
-        #     "store_sn": "LPK001"
-        # }
+
         self.__dict__['environ'] = self.user.environment.parsed_options.env
         self.__dict__['info'] = dev_info if self.__dict__['environ'] != 'prod' else prod_info
         self.__dict__['member_info'] = self.user.__dict__['member_info']
@@ -149,15 +142,23 @@ class WxAndCardPayUser(HttpUser):
         self.__dict__['member_info'] = self.environment.__dict__['member_infos_q'].get()
 
 
+class StepLoadShape(LoadTestShape):
+    step_duration = 60  # Each step lasts 60 seconds
+    step_users = 10    # Add 10 users at each step
+    total_steps = 5     # Number of steps
+
+    def tick(self):
+        run_time = self.get_run_time()
+        print(f'run_time: {run_time}')
+        current_step = run_time // self.step_duration
+        if current_step > self.total_steps:
+            return None
+        user_count = self.step_users * (current_step + 1)
+        return (user_count, self.step_users)
+
+
 def query_card_numbers(member_sn, card_num, environment="dev"):
-    # dev_info = {
-    #     "host": "https://vip-apigateway.iwosai.com",
-    #     "brand_code": "1024"
-    # }
-    # prod_info = {
-    #     "host": "https://vip-apigateway.iwosai.com",
-    #     "brand_code": "999888"
-    # }
+
     info = dev_info if environment != "prod" else prod_info
     url = info["host"] + "/api/wallet/v1/giftcard/members/cards/list"
     headers = {"Content-Type": "application/json"}
@@ -173,6 +174,9 @@ def query_card_numbers(member_sn, card_num, environment="dev"):
     }
     body = AuthUtils(environment).signature(biz_body)
     response = requests.post(url=url, headers=headers, json=body)
+    # print(response.request.url)
+    # print(response.request.body)
+    # print(response.text)
     cards_list = jsonpath.jsonpath(response.json(), "$.response.body.biz_response.data.cards")[0]
     cards = random.sample(cards_list, int(card_num))
     cards_number = list(map(lambda card: card['card_number'], cards))
@@ -182,7 +186,7 @@ def query_card_numbers(member_sn, card_num, environment="dev"):
 def prepare_wallet_users(environment, number):
     client_member_sns = []
     dev_member_file_path = "/Users/lizhankang/workSpace/selfProject/pythonProject/it-is-useful/shouqianba/src/main/test/wallet/wallet_sn_2024-07-04T17:35:16+08:00.csv"
-    prod_member_file_path = ""
+    prod_member_file_path = "/Users/lizhankang/workSpace/selfProject/pythonProject/it-is-useful/shouqianba/src/main/test/wallet/wallet_sn_2024-07-04T17:35:16+08:00.csv"
     client_member_sn_path = dev_member_file_path if environment != 'prod' else prod_member_file_path
     with open(client_member_sn_path, newline='') as csvfile:
         reader = csv.DictReader(csvfile)
@@ -227,10 +231,11 @@ def locust_environment_init(environment: Environment, **kwargs):
 
 
 if __name__ == '__main__':
-    num = 2
-    environ = os.getenv("ENVIRONMENT", "dev")
+    num = 50
+    # environ = os.getenv("ENVIRONMENT", "dev")
+    environ = "prod"
     file_name = os.path.basename(os.path.abspath(__file__))
-    host = "https://vip-apigateway.iwosai.com" if environ != "prod" else "https://vapi-s.shouqianba.com"
+    host = "https://vip-apigateway.iwosai.com" if environ != "prod" else "https://vapi.shouqianba.com"
     command_str = (f"locust -f {file_name} --host={host} --users {num} --env={environ}"
                    f" --expect-workers {int(num / 6) + 1} --spawn-rate 6")
     os.system(command_str)

@@ -20,7 +20,7 @@ dev_info = {
         "store_sn": "LPK001"
     }
 prod_info = {
-    "host": "https://vip-apigateway.iwosai.com",
+    "host": "https://vapi.shouqianba.com",
     "brand_code": "999888",
     "store_sn": "LPK001"
 }
@@ -40,10 +40,10 @@ class QRCodePayTaskSet(SequentialTaskSet):
                     }
         with self.client.post(endpoint, json=body, catch_response=True) as response:
             if response.status_code == 200:
-                print(f'[ Card Pay URL ]: {response.request.url}')
-                print(f'[ Card Pay REQUEST ]: {response.request.body.decode("utf-8")}')
+                print(f'[ QRCode Pay URL ]: {response.request.url}')
+                print(f'[ QRCode Pay REQUEST ]: {response.request.body.decode("utf-8")}')
                 print(f'请求耗时: {response.request_meta["response_time"]}ms')
-                print(f'[ Card Pay RESPONSE ]: {response.text}')
+                print(f'[ QRCode Pay RESPONSE ]: {response.text}')
         self.interrupt()
 
 
@@ -89,6 +89,9 @@ def prepare_pay_order(user_nums, auth_utils=AuthUtils("dev")):
         body = auth_utils.signature(purchase_body)
         response = requests.post(url=purchase_url, headers=headers, json=body)
         if response.status_code == 200:
+            print(f'[ purchase Pay URL ]: {response.request.url}')
+            print(f'[ purchase Pay URL ]: {response.request.body}')
+            print(f'[ purchase Pay URL ]: {response.text}')
             try:
                 order_token = jsonpath.jsonpath(response.json(), "$.response.body.biz_response.data.order_token")
                 order_tokens.append(order_token[0])
@@ -122,8 +125,8 @@ def locust_environment_init(environment: Environment, **kwargs):
 
 if __name__ == '__main__':
     num = 2
-    # environ = os.getenv("ENVIRONMENT", "dev")
-    environ = "dev"
+    environ = os.getenv("ENVIRONMENT", "dev")
+    # environ = "prod"
     file_name = os.path.basename(os.path.abspath(__file__))
     host = "https://vip-apigateway.iwosai.com" if environ != "prod" else "https://vapi.shouqianba.com"
     command_str = (f"locust -f {file_name} --host={host} --users {num} --env={environ}"

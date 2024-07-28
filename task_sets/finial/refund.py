@@ -95,8 +95,8 @@ def prepare_pay_order(environ, num_users):
     data_info = {
         "brand_code": "1024" if environ != "prod" else "999888",
         "store_sn": "LPK001" if environ != "prod" else "LPK001",
-        "client_member_sn": "lip-p-David" if environ != "prod" else "lip-vip",
-        "card_number": "20014057378" if environ != "prod" else "20016406368",
+        "client_member_sn": "lip-p-David" if environ != "prod" else "lip-p-Tara",
+        "card_number": "20014057378" if environ != "prod" else "20016967109",
     }
     tenders_sns = []
     for _ in tqdm(range(num_users), desc="数据准备中,请稍后....."):
@@ -130,7 +130,7 @@ def prepare_pay_order(environ, num_users):
                 "brand_code": data_info['brand_code'],
                 "store_sn": "LPK001",
                 "workstation_sn": "567",
-                "amount": "1000",
+                "amount": "3000",
                 "scene_type": "1",
                 "dynamic_id": auth_code,
                 "currency": "156",
@@ -175,9 +175,9 @@ def locust_environment_init(environment: Environment, **kwargs):
 
 
 if __name__ == '__main__':
-    num = 15
-    # environ = os.getenv("ENVIRONMENT", "dev")
-    environ = "prod"
+    num = 3
+    environ = os.getenv("ENVIRONMENT", "dev")
+    # environ = "prod"
     file_name = os.path.basename(os.path.abspath(__file__))
     host = "https://vip-apigateway.iwosai.com" if environ != "prod" else "https://vapi-s.shouqianba.com"
     command_str = (f"locust -f {file_name} --host={host} --users {num} --env={environ}"

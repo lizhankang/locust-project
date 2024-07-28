@@ -6,7 +6,7 @@ import time
 
 import jsonpath
 from locust.env import Environment
-from locust import HttpUser, SequentialTaskSet, task, events
+from locust import HttpUser, SequentialTaskSet, task, events, LoadTestShape
 from tqdm import tqdm
 
 from common.auth_utils import AuthUtils
@@ -48,7 +48,7 @@ class MultiCardsPayTaskSet(SequentialTaskSet):
             "check_sn": "Multi card-" + check_sn,
             "sales_sn": "Multi card-" + sales_sn,
             "sales_time": AuthUtils.date_time(),
-            "subject": "Subject of the purchase order - ",
+            "subject": "Subject of the 多卡支付并发测试 order - ",
             "description": "Description of purchase order",
             "operator": "operator of order -> lip",
             "customer": "customer of order -> lip",
@@ -122,10 +122,25 @@ class MultiCardPayUser(HttpUser):
         self.__dict__['member_sn'] = self.environment.__dict__['member_sn_q'].get()
 
 
+class StepLoadShape(LoadTestShape):
+    step_duration = 60  # Each step lasts 60 seconds
+    step_users = 10    # Add 10 users at each step
+    total_steps = 5     # Number of steps
+
+    def tick(self):
+        run_time = self.get_run_time()
+        print(f'run_time: {run_time}')
+        current_step = run_time // self.step_duration
+        if current_step > self.total_steps:
+            return None
+        user_count = self.step_users * (current_step + 1)
+        return (user_count, self.step_users)
+
+
 def prepare_wallet_users(environment):
     client_member_sns = []
     dev_member_file_path = "/Users/lizhankang/workSpace/selfProject/pythonProject/it-is-useful/shouqianba/src/main/test/wallet/wallet_sn_2024-07-04T17:35:16+08:00.csv"
-    prod_member_file_path = ""
+    prod_member_file_path = "/Users/lizhankang/workSpace/selfProject/pythonProject/it-is-useful/shouqianba/src/main/test/wallet/wallet_sn_2024-07-04T17:35:16+08:00.csv"
     client_member_sn_path = dev_member_file_path if environment != 'prod' else prod_member_file_path
     with open(client_member_sn_path, newline='') as csvfile:
         reader = csv.DictReader(csvfile)
@@ -157,10 +172,11 @@ def locust_environment_init(environment: Environment, **kwargs):
 
 
 if __name__ == '__main__':
-    num = 2
-    environ = os.getenv("ENVIRONMENT", "dev")
+    num = 50
+    # environ = os.getenv("ENVIRONMENT", "dev")
+    environ = "prod"
     file_name = os.path.basename(os.path.abspath(__file__))
-    host = "https://vip-apigateway.iwosai.com" if environ != "prod" else "https://vapi-s.shouqianba.com"
+    host = "https://vip-apigateway.iwosai.com" if environ != "prod" else "https://vapi.shouqianba.com"
     command_str = (f"locust -f {file_name} --host={host} --users {num} --env={environ}"
                    f" --expect-workers {int(num / 6) + 1} --spawn-rate 6")
     os.system(command_str)

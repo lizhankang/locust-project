@@ -181,8 +181,9 @@ def locust_environment_init(environment: Environment, **kwargs):
 
 
 if __name__ == '__main__':
-    num = 2
-    environ = os.getenv("ENVIRONMENT", "dev")
+    num = 3
+    # environ = os.getenv("ENVIRONMENT", "dev")
+    environ = "dev"
     file_name = os.path.basename(os.path.abspath(__file__))
     host = "https://vip-apigateway.iwosai.com" if environ != "prod" else "https://vapi.shouqianba.com"
     command_str = (f"locust -f {file_name} --host={host} --users {num} --env={environ}"

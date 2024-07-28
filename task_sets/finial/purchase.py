@@ -36,11 +36,11 @@ class PurchaseTaskSet(SequentialTaskSet):
             "scene": "5",
             "currency": "156",
             "industry_code": "0",
-            "check_sn": "100个并发 - " + check_sn,
-            "sales_sn": "100个并发 - " + sales_sn,
+            "check_sn": "100 个并发 - " + check_sn,
+            "sales_sn": "100 个并发 - " + sales_sn,
             "sales_time": AuthUtils.date_time(),
             "subject": "Subject of the purchase performance order",
-            "description": "Description of 100个并发，持续240s 并发测试",
+            "description": "Description of 100 个并发，持续240s 并发测试",
             "operator": "operator of order -> lip",
             "customer": "customer of order -> lip",
             "pos_info": "POS_INFO of the purchase order",
@@ -89,9 +89,9 @@ def locust_environment_init(environment: Environment, **kwargs):
 
 
 if __name__ == '__main__':
-    num = 100
-    # environ = os.getenv("ENVIRONMENT", "dev")
-    environ = "prod"
+    num = 60
+    environ = os.getenv("ENVIRONMENT", "dev")
+    # environ = "prod"
     file_name = os.path.basename(os.path.abspath(__file__))
     host = "https://vip-apigateway.iwosai.com" if environ != "prod" else "https://vapi-s.shouqianba.com"
     command_str = (f"locust -f {file_name} --host={host} --users {num} --env={environ}"
