@@ -32,7 +32,7 @@ class PurchaseTaskSet(SequentialTaskSet):
         endpoint = "/api/lite-pos/v1/sales/purchase"
         headers = {
             "Content-Type": "application/json",
-            # "App-Id": "application/json",
+            "App-Id": "application/json",
         }
         check_sn = sales_sn = request_id = AuthUtils.unique_random(10)
 
@@ -64,18 +64,18 @@ class PurchaseTaskSet(SequentialTaskSet):
                 "selected_giftcard": "0"
             }
         }
-        sign_t_start = time.time()
-        body = self.auth.signature(biz_body)
-        sign_t_end = time.time()
-        # body = biz_body
+        # sign_t_start = time.time()
+        # body = self.auth.signature(biz_body)
+        # sign_t_end = time.time()
+        body = biz_body
         with self.client.post(url=endpoint, headers=headers, json=body,
                               name='purchase'.upper(), catch_response=True) as response:
             if response.status_code != 200:
                 response.failure(f"通讯异常!!! 通讯状态码: {response.status_code}")
                 return
             resp = response.json()
-            result_code = jsonpath.jsonpath(resp, "$.response.body.biz_response.result_code")[0]
-            # result_code = jsonpath.jsonpath(resp, "$..biz_response.result_code")[0]
+            # result_code = jsonpath.jsonpath(resp, "$.response.body.biz_response.result_code")[0]
+            result_code = jsonpath.jsonpath(resp, "$..biz_response.result_code")[0]
 
             if result_code != '200':
                 response.failure(f"通讯异常!!! 通讯状态码: {response.status_code}")
@@ -173,7 +173,7 @@ def locust_environment_init(environment: Environment, **kwargs):
 if __name__ == '__main__':
     environ = "dev"
     file_name = os.path.basename(os.path.abspath(__file__))
-    host = "https://vip-apigateway.iwosai.com" if environ != "prod" else "https://vapi-s.shouqianba.com"
-    # host = "https://lite-pos-service" if environ != "prod" else "https://vapi-s.shouqianba.com"
+    # host = "https://vip-apigateway.iwosai.com" if environ != "prod" else "https://vapi-s.shouqianba.com"
+    host = "https://lite-pos-service.iwosai.com" if environ != "prod" else "https://vapi-s.shouqianba.com"
     command_str = f"locust -f {file_name} --host={host} --env={environ} --processes -1 --max-user-num=200"
     os.system(command_str)
