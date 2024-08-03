@@ -32,6 +32,7 @@ class PurchaseTaskSet(SequentialTaskSet):
         endpoint = "/api/lite-pos/v1/sales/purchase"
         headers = {
             "Content-Type": "application/json",
+            # "App-Id": "application/json",
         }
         check_sn = sales_sn = request_id = AuthUtils.unique_random(10)
 
@@ -66,13 +67,23 @@ class PurchaseTaskSet(SequentialTaskSet):
         sign_t_start = time.time()
         body = self.auth.signature(biz_body)
         sign_t_end = time.time()
+        # body = biz_body
         with self.client.post(url=endpoint, headers=headers, json=body,
                               name='purchase'.upper(), catch_response=True) as response:
-            print(f'[URL]: {response.request.url}')
-            print(f'计算签名值耗时：{(sign_t_end - sign_t_start) * 1000} ms')
-            print(f'[REQUEST]: {response.request.body.decode("utf-8")}')
-            print(f'请求耗时: {response.request_meta["response_time"]}ms')
-            print(f'[RESPONSE]: {response.text}')
+            if response.status_code != 200:
+                response.failure(f"通讯异常!!! 通讯状态码: {response.status_code}")
+                return
+            resp = response.json()
+            result_code = jsonpath.jsonpath(resp, "$.response.body.biz_response.result_code")[0]
+            # result_code = jsonpath.jsonpath(resp, "$..biz_response.result_code")[0]
+
+            if result_code != '200':
+                response.failure(f"通讯异常!!! 通讯状态码: {response.status_code}")
+                print(f'[URL]: {response.request.url} [REQUEST]: {response.request.body.decode("utf-8")} [RESPONSE]: {response.text}')
+                return
+
+            # print(f'计算签名值耗时：{(sign_t_end - sign_t_start) * 1000} ms 请求耗时: {response.request_meta["response_time"]}ms')
+
         self.interrupt()
 
 
@@ -144,13 +155,9 @@ def locust_environment_init(environment: Environment, **kwargs):
     runner_info = None
     if isinstance(runner, MasterRunner):
         runner_info = f'{role}-pid:{pid}'
-        # for i in range(num_users):
-        #     global_data_queue.put(i)
-        print("This is the master node.")
         environment.shape_class = CustomLoadTestShape(
-            max_user_num=max_user_num,
-            start_user_num=10,
-            step_add_users=10,
+            start_user_num=100,
+            step_add_users=100,
             step_duration=60,
             total_time_limit=1200,
 
@@ -167,5 +174,6 @@ if __name__ == '__main__':
     environ = "dev"
     file_name = os.path.basename(os.path.abspath(__file__))
     host = "https://vip-apigateway.iwosai.com" if environ != "prod" else "https://vapi-s.shouqianba.com"
+    # host = "https://lite-pos-service" if environ != "prod" else "https://vapi-s.shouqianba.com"
     command_str = f"locust -f {file_name} --host={host} --env={environ} --processes -1 --max-user-num=200"
     os.system(command_str)

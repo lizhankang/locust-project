@@ -120,12 +120,12 @@ def locust_environment_init(environment: Environment, **kwargs):
 @events.test_start.add_listener
 def on_test_start(environment, **kwargs):
     # 如果有 LoadTestShape 子类的时候，才会有值
-    shape_class = environment.shape_class
+    # shape_class = environment.shape_class
 
     # shape_class = environment.shape_class
     # if isinstance(shape_class, StepLoadShape):
     #     shape_class.max_user_num = environment.parsed_options.num_users
-    print(shape_class.__dict__)
+    # print(shape_class.__dict__)
     '''执行数据准备'''
     print("--------------------------------------测试开始执行-----------------")
 

@@ -2,6 +2,7 @@ import json
 import os
 import queue
 import time
+import logging
 
 import requests
 from locust.env import Environment
@@ -9,6 +10,12 @@ from locust import HttpUser, SequentialTaskSet, task, events, LoadTestShape
 from locust.runners import MasterRunner, WorkerRunner, LocalRunner
 
 from common.auth_utils import AuthUtils
+
+
+# 配置日志记录
+logging.basicConfig(level=logging.INFO)
+
+logger = logging.getLogger(__name__)
 
 
 class SingleCardDetailTaskSet(SequentialTaskSet):
@@ -26,12 +33,15 @@ class SingleCardDetailTaskSet(SequentialTaskSet):
         }
         body = self.auth.signature(biz_body)
         with self.client.post(endpoint, headers=headers, json=body, catch_response=True) as resp:
-            if resp.status_code == 200:
+            if resp.status_code != 200:
                 # print(resp.request.body)
                 # print(resp.text)
-                print()
-            else:
+                logger.error(f"通讯状态码错误!! status code: {resp.status_code}")
                 resp.failure(f"通讯状态码错误!! status code: {resp.status_code}")
+            else:
+                pass
+                # logger.info(f"{resp.request.body.decode('utf-8')}")
+                # logger.info(f"{resp.text}")
         self.interrupt()
 
 
@@ -45,7 +55,7 @@ class SingleCardDetailUser(HttpUser):
 
 class CustomLoadTestShape(LoadTestShape):
 
-    def __init__(self, step_duration=30, step_add_users=5, total_time_limit=600, start_user_num=5, max_user_num=0):
+    def __init__(self, step_duration=30, step_add_users=5, total_time_limit=0, start_user_num=5, max_user_num=0):
         super().__init__()
         # 每个阶段持续时间（秒）
         self.step_duration = step_duration
@@ -65,7 +75,7 @@ class CustomLoadTestShape(LoadTestShape):
         run_time = self.get_run_time()
         print(f'run_time: {run_time} 秒')
         # 判断是否超过了压力测试的最大持续时间
-        if run_time > self.total_time_limit:
+        if (self.total_time_limit > 0) and (run_time > self.total_time_limit):
             return None
         # 计算当前时间的虚拟用户数量
         current_step = round(run_time // self.step_duration)
@@ -107,11 +117,11 @@ def locust_environment_init(environment: Environment, **kwargs):
         #     global_data_queue.put(i)
         print("This is the master node.")
         environment.shape_class = CustomLoadTestShape(
-            max_user_num=600,
+            max_user_num=2000,
             start_user_num=50,
             step_add_users=50,
-            step_duration=60,
-            total_time_limit=840,
+            step_duration=30,
+            total_time_limit=900,
 
         )
 
@@ -148,5 +158,5 @@ if __name__ == '__main__':
     print(os.cpu_count())
     file_name = os.path.basename(os.path.abspath(__file__))
     host = "https://vip-apigateway.iwosai.com" if environ != "prod" else "https://vapi-s.shouqianba.com"
-    command_str = f"locust -f {file_name} --host={host} --expect-workers 20 --env=dev  --processes -1"
+    command_str = f"locust -f {file_name} --host={host} --env=dev  --processes -1"
     os.system(command_str)

@@ -40,20 +40,33 @@ class OrderDetailTaskSet(SequentialTaskSet):
 
         with self.client.get(url=endpoint, headers=headers, params=params,
                              name='order_detail'.upper(), catch_response=True) as response:
-            print(f'[URL]: {response.request.url}')
-            print(f'[RESPONSE]: {response.text}')
+            # print(f'[URL]: {response.request.url}')
+            # print(f'[RESPONSE]: {response.text}')
+            pass
         self.interrupt()
 
 
 class OrderDetailUser(HttpUser):
     tasks = [OrderDetailTaskSet]
+    num = 0
 
     def __init__(self, environment):
         super().__init__(environment)
         self.order_token = self.environment.order_token_q.get()
+        print(f'{environment.runner_info} -- {self.order_token}')
+        # print(f'{environment.runner_info} --已创建 {OrderDetailUser.num} 个用户')
+        # print(f'{environment.runner_info} --还剩余 {environment.order_token_q.qsize()} 条数据可使用')
+        # try:
+        #     self.order_token = self.environment.order_token_q.get()
+        #     print(f"{environment.runner} -- 成功创建一个新的用户")
+        #     OrderDetailUser.num += 1
+        #
+        # except:
+        #     print("从管道中获取数据失败，导致创建用户失败...")
+        # print(f'{environment.runner_info} --剩余 {environment.order_token_q.qsize()} 条数据可使用')
 
-    def on_stop(self):
-        self.environment.__dict__['order_token_q'].put(self.__dict__['order_token'])
+    # def on_stop(self):
+    #     self.environment.__dict__['order_token_q'].put(self.__dict__['order_token'])
 
 
 # Use the custom load shape
@@ -90,7 +103,7 @@ class CustomLoadTestShape(LoadTestShape):
         # 现在最大虚拟用户数量
         if (self.max_user_num > 0) and (user_count > self.max_user_num):
             user_count = self.max_user_num
-        print(f'run_time: {run_time} 秒， user_count: {user_count}')
+        print(f'run_time: {run_time} 秒， 此时应该要有: {user_count} 个user')
         return (user_count, self.step_add_users)
 
 
@@ -258,7 +271,9 @@ def locust_environment_init(environment: Environment, **kwargs):
 
 @events.test_start.add_listener
 def on_test_start(environment, **kwargs):
-    '''执行数据准备'''
+    """
+    执行数据准备
+    """
     runner = environment.runner
     cpu_numbers = environment.parsed_options.processes
     data_numbers = environment.parsed_options.max_user_num
@@ -267,15 +282,18 @@ def on_test_start(environment, **kwargs):
         pass
     # 如果是 WorkerRunner 根据CPU的数量各自准备数据
     if isinstance(runner, WorkerRunner):
-        print(f'{environment.runner_info} -- 需要准备 {(data_numbers // cpu_numbers) + 1} 条数据')
+        # print(f'{environment.runner_info} -- 需要准备 {(data_numbers // cpu_numbers) + 1} 条数据')
         environment.order_token_q = queue.Queue()
-        order_token(environment.auth, (data_numbers // cpu_numbers) + 1, environment.order_token_q)
+
+        order_token(environment.auth, (data_numbers // (cpu_numbers * 5)) + 1, environment.order_token_q)
+
+        print(f'{environment.runner_info} -- 准备了 {environment.order_token_q.qsize()} 条数据')
 
     # 如果是 LocalRunner 全量准备数据
     if isinstance(runner, LocalRunner):
         print(f'{environment.runner_info} -- {cpu_numbers}')
 
-    print(f"----------------------测试开始执行-----------------{environment.runner_info}")
+    print(f"------------------------ 测 试 开 始 执 行 --------------------{environment.runner_info}")
 
 
 @events.test_stop.add_listener
@@ -283,9 +301,14 @@ def on_test_stop(environment, **kwargs):
     print(f'!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 测 试 执 行 结 束 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
 
 
+@events.spawning_complete.add_listener
+def on_spawning_complete(user_count, **kwargs):
+    print(f"Spawning complete. Current user count: {user_count}")
+
+
 if __name__ == '__main__':
     environ = "dev"
     file_name = os.path.basename(os.path.abspath(__file__))
     host = "https://vip-apigateway.iwosai.com" if environ != "prod" else "https://vapi-s.shouqianba.com"
-    command_str = f"locust -f {file_name} --host={host} --env={environ} --processes -1 --max-user-num=200"
+    command_str = f"locust -f {file_name} --host={host} --env={environ} --processes -1 --max-user-num=20"
     os.system(command_str)

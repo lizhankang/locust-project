@@ -134,5 +134,5 @@ if __name__ == '__main__':
     environ = "dev"
     file_name = os.path.basename(os.path.abspath(__file__))
     host = "https://vip-apigateway.iwosai.com" if environ != "prod" else "https://vapi-s.shouqianba.com"
-    command_str = f"locust -f {file_name} --host={host} --expect-workers 20 --env=dev  --processes -1"
+    command_str = f"locust -f {file_name} --host={host} --expect-workers 20 --env=dev --processes -1"
     os.system(command_str)

@@ -1,49 +1,69 @@
-import json
 import os
+import time
+import logging
 
-from jsonpath import jsonpath
+import jsonpath
 from locust.env import Environment
-from locust import SequentialTaskSet, task, events, LoadTestShape, FastHttpUser
-from locust.runners import MasterRunner, WorkerRunner
+from locust.runners import WorkerRunner, MasterRunner
 
 from common.auth_utils import AuthUtils
+from locust import HttpUser, SequentialTaskSet, LoadTestShape, task, events
+
+staging_info = {
+    "brand_code": "1024",
+    "store_sn": "LPK001",
+    "member_sn": "lip-vip"
+}
+prod_info = {
+    "brand_code": "999888",
+    "store_sn": "LPK001",
+    "member_sn": "lip-p-Tara"
+}
+# 配置日志记录
+logging.basicConfig(level=logging.INFO)
+
+logger = logging.getLogger(__name__)
 
 
-class BindTaskSet(SequentialTaskSet):
+class CheckApiTaskSet(SequentialTaskSet):
+
     def on_start(self):
-        self.auth = self.user.__dict__['auth']
+        self.auth = self.user.auth
+        self.environ = self.auth.environment
+        self.__dict__['info'] = staging_info if self.environ != 'prod' else prod_info
 
     @task
-    def task(self):
-        endpoint = "/api/wallet/v1/giftcard/members/cards/redeem"
-        headers = {'Content-Type': 'application/json'}
-        biz_body = {
-                "brand_code": "1024",
-                "client_member_sn": "lip-vip",
-                "redeem_code": "43788063296618536511"
-            }
-        body = self.auth.signature(biz_body)
-        with self.client.post(endpoint, headers=headers, json=body, catch_response=True) as response:
+    def task1(self):
+        endpoint = "/check"
+        headers = {
+            "Content-Type": "application/json",
+        }
+        # time.sleep(1)
+
+        with self.client.get(url=endpoint, headers=headers,
+                             name='check'.upper(), catch_response=True) as response:
             if response.status_code != 200:
-                response.failure(f"通讯异常!!! 通讯状态码: {response.status_code}")
-                return
+                logger.error(f'[URL]: {response.request.url}')
+                logger.error(f'请求耗时: {response.request_meta["response_time"]}ms')
+                logger.error(f'[RESPONSE]: {response.text}')
+                print(f'[URL]: {response.request.url}')
+                print(f'请求耗时: {response.request_meta["response_time"]}ms')
+                print(f'[RESPONSE]: {response.text}')
 
-            resp = response.json()
-            result_code = jsonpath(resp, "$.response.body.result_code.biz_response.result_code")
-            error_code = jsonpath(resp, "$.response.body.result_code.biz_response.error_code")
-            if result_code == '400' and error_code == 'W.COMMON.SYSTEM_ERROR':
-                response.failure(f"业务异常: {response.text}")
-                return
-
+            else:
+                # logger.info(f'[URL]: {response.request.url}')
+                # logger.info(f'请求耗时: {response.request_meta["response_time"]}ms')
+                logger.info(f'[RESPONSE]: {response.text}')
         self.interrupt()
 
 
-class BindUser(FastHttpUser):
-    tasks = [BindTaskSet]
+class CheckApiUser(HttpUser):
+    tasks = [CheckApiTaskSet]
 
     def __init__(self, environment):
         super().__init__(environment)
-        self.__dict__['auth'] = self.environment.__dict__['auth']
+        self.auth = self.environment.auth
+
 
 class CustomLoadTestShape(LoadTestShape):
 
@@ -94,10 +114,10 @@ def command_line(parser):
 @events.init.add_listener
 def locust_environment_init(environment: Environment, **kwargs):
     environ = environment.parsed_options.env
-    num_users = environment.parsed_options.max_user_num
+    max_user_num = environment.parsed_options.max_user_num
 
     auth = AuthUtils(environ)
-    environment.__dict__['auth'] = auth
+    environment.auth = auth
 
     pid = os.getpid()
     runner = environment.runner
@@ -105,42 +125,24 @@ def locust_environment_init(environment: Environment, **kwargs):
     runner_info = None
     if isinstance(runner, MasterRunner):
         runner_info = f'{role}-pid:{pid}'
-        # for i in range(num_users):
-        #     global_data_queue.put(i)
-        print("This is the master node.")
         environment.shape_class = CustomLoadTestShape(
-            max_user_num=600,
-            start_user_num=50,
-            step_add_users=50,
+            start_user_num=100,
+            step_add_users=100,
             step_duration=60,
-            total_time_limit=1200,
+            total_time_limit=900,
         )
 
     if isinstance(runner, WorkerRunner):
         runner_info = f'{role} [{runner.worker_index}] -pid:{pid}'
     environment.__dict__['runner_info'] = runner_info
 
-    print("-------------Locust环境初始化成功-------👌👌👌👌👌")
-
-
-@events.test_start.add_listener
-def on_test_start(environment, **kwargs):
-    # 如果有 LoadTestShape 子类的时候，才会有值
-    shape_class = environment.shape_class
-
-    print(shape_class.__dict__)
-    '''执行数据准备'''
-    print("--------------------------------------测试开始执行-----------------")
-
-
-@events.test_stop.add_listener
-def on_test_stop(environment, **kwargs):
-    print(f'!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 测 试 执 行 结 束 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+    print(f"-------------Locust环境初始化成功-------👌👌👌👌👌- {runner_info}")
 
 
 if __name__ == '__main__':
     environ = "dev"
     file_name = os.path.basename(os.path.abspath(__file__))
     host = "https://vip-apigateway.iwosai.com" if environ != "prod" else "https://vapi-s.shouqianba.com"
-    command_str = f"locust -f {file_name} --host={host} --env=dev --processes -1"
+    # host = "http://lite-pos-core.beta.iwosai.com" if environ != "prod" else "https://vapi-s.shouqianba.com"
+    command_str = f"locust -f {file_name} --host={host} --env={environ} --processes -1 --max-user-num=200"
     os.system(command_str)

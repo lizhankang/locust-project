@@ -4,14 +4,34 @@ import os
 from jsonpath import jsonpath
 from locust.env import Environment
 from locust import SequentialTaskSet, task, events, LoadTestShape, FastHttpUser
-from locust.runners import MasterRunner, WorkerRunner
+from locust.runners import MasterRunner, WorkerRunner, LocalRunner
 
 from common.auth_utils import AuthUtils
 
+import pandas as pd
+import queue
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-class BindTaskSet(SequentialTaskSet):
+from tqdm import tqdm
+
+
+def read_auth_codes():
+    excel_path = "/Users/lizhankang/Documents/shouqianba/staging-自压测报告/1024品牌50w测试卡.xlsx"
+    cols = ["静态核销码", "卡号"]
+    df = pd.read_excel(excel_path, usecols=cols)
+    # df.iloc[:, 0].tolist()
+    data = df.to_dict("records")
+    return data
+
+
+auth_codes = read_auth_codes()
+
+
+class Bind2TaskSet(SequentialTaskSet):
     def on_start(self):
-        self.auth = self.user.__dict__['auth']
+        self.auth = self.user.auth
+        self.redeem_code = self.user.environment.auth_code_q.get() \
+            if not self.user.environment.auth_code_q.empty() else "12345678900987654321"
 
     @task
     def task(self):
@@ -19,8 +39,8 @@ class BindTaskSet(SequentialTaskSet):
         headers = {'Content-Type': 'application/json'}
         biz_body = {
                 "brand_code": "1024",
-                "client_member_sn": "lip-vip",
-                "redeem_code": "43788063296618536511"
+                "client_member_sn": "lip-bind-stress-testing",
+                "redeem_code": self.redeem_code["静态核销码"]
             }
         body = self.auth.signature(biz_body)
         with self.client.post(endpoint, headers=headers, json=body, catch_response=True) as response:
@@ -29,21 +49,28 @@ class BindTaskSet(SequentialTaskSet):
                 return
 
             resp = response.json()
-            result_code = jsonpath(resp, "$.response.body.result_code.biz_response.result_code")
-            error_code = jsonpath(resp, "$.response.body.result_code.biz_response.error_code")
-            if result_code == '400' and error_code == 'W.COMMON.SYSTEM_ERROR':
-                response.failure(f"业务异常: {response.text}")
-                return
+            result_code = jsonpath(resp, "$.response.body.biz_response.result_code")[0]
+            error_code = jsonpath(resp, "$.response.body.biz_response.error_code")
+            # if result_code == '400' and error_code == 'W.COMMON.SYSTEM_ERROR':
+            #     response.failure(f"业务异常: {response.text}")
+            #     return
+            if result_code == '200':
+                print(f" 卡号: {self.redeem_code['卡号']} 兑换成功, 静态核销码: {self.redeem_code['静态核销码']}..")
+            else:
+                msg = (f'Request: {json.loads(response.request.body)} \n Response: {response.text} \n'
+                       f'Card number: {self.redeem_code["卡号"]} Redeem code: {self.redeem_code["静态核销码"]}')
+                response.failure(msg)
 
         self.interrupt()
 
 
-class BindUser(FastHttpUser):
-    tasks = [BindTaskSet]
+class Bind2User(FastHttpUser):
+    tasks = [Bind2TaskSet]
 
     def __init__(self, environment):
         super().__init__(environment)
-        self.__dict__['auth'] = self.environment.__dict__['auth']
+        self.auth = self.environment.auth
+
 
 class CustomLoadTestShape(LoadTestShape):
 
@@ -65,7 +92,7 @@ class CustomLoadTestShape(LoadTestShape):
     def tick(self):
         # 查测试已经运行了多长时间
         run_time = self.get_run_time()
-        print(f'run_time: {run_time} 秒')
+
         # 判断是否超过了压力测试的最大持续时间
         if run_time > self.total_time_limit:
             return None
@@ -78,7 +105,7 @@ class CustomLoadTestShape(LoadTestShape):
         # 现在最大虚拟用户数量
         if (self.max_user_num > 0) and (user_count > self.max_user_num):
             user_count = self.max_user_num
-        print(f'user_count: {user_count}')
+        print(f'run_time: {run_time} 秒')
         return (user_count, self.step_add_users)
 
 
@@ -104,38 +131,61 @@ def locust_environment_init(environment: Environment, **kwargs):
     role = runner.__class__.__name__
     runner_info = None
     if isinstance(runner, MasterRunner):
-        runner_info = f'{role}-pid:{pid}'
-        # for i in range(num_users):
-        #     global_data_queue.put(i)
-        print("This is the master node.")
+
         environment.shape_class = CustomLoadTestShape(
-            max_user_num=600,
+            # max_user_num=150,
             start_user_num=50,
             step_add_users=50,
             step_duration=60,
-            total_time_limit=1200,
+            total_time_limit=600,
         )
-
+        runner_info = f'{role} -pid:{pid}'
     if isinstance(runner, WorkerRunner):
+        runner_info = f'{role} [{runner.worker_index}] -pid:{pid}'
+    if isinstance(runner, LocalRunner):
         runner_info = f'{role} [{runner.worker_index}] -pid:{pid}'
     environment.__dict__['runner_info'] = runner_info
 
-    print("-------------Locust环境初始化成功-------👌👌👌👌👌")
+    print(f"-------------Locust环境初始化成功------- {runner_info} 👌👌👌👌👌")
 
 
 @events.test_start.add_listener
 def on_test_start(environment, **kwargs):
-    # 如果有 LoadTestShape 子类的时候，才会有值
-    shape_class = environment.shape_class
+    runner = environment.runner
 
-    print(shape_class.__dict__)
-    '''执行数据准备'''
-    print("--------------------------------------测试开始执行-----------------")
+    if isinstance(runner, MasterRunner):
+        pass
+
+    # 如果是 WorkerRunner 根据CPU的数量各自准备数据
+    if isinstance(runner, WorkerRunner):
+        environment.auth_code_q = queue.Queue()
+        worker_index = runner.worker_index
+        cpu_number = environment.parsed_options.processes
+        if len(auth_codes) % cpu_number != 0:
+            worker_data_number = len(auth_codes) // cpu_number
+            if worker_index == cpu_number - 1:
+                worker_data = auth_codes[worker_index * worker_data_number:]
+            else:
+                worker_data = auth_codes[worker_index * worker_data_number: (worker_index + 1) * worker_data_number]
+        else:
+            worker_data_number = len(auth_codes) // cpu_number
+            worker_data = auth_codes[worker_index * worker_data_number: (worker_index + 1) * worker_data_number]
+
+        for data in worker_data:
+            environment.auth_code_q.put(data)
+
+    # 如果是 LocalRunner 全量准备数据
+    if isinstance(runner, LocalRunner):
+
+        pass
+
+    print(f"------------测试开始执行-----{environment.runner_info}")
 
 
 @events.test_stop.add_listener
 def on_test_stop(environment, **kwargs):
-    print(f'!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 测 试 执 行 结 束 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+
+    print(f"------------ 测 试 执 行 结 束 ----- {environment.runner_info} 创建了 {environment.runner.user_count} 个用户")
 
 
 if __name__ == '__main__':

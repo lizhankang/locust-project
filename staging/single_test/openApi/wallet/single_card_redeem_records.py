@@ -20,9 +20,9 @@ class SingleCardRedeemRecordTaskSet(SequentialTaskSet):
         endpoint = "/api/wallet/v1/giftcard/members/cards/redeem-records"
         headers = {'Content-Type': 'application/json'}
         biz_body = {
-            "brand_code": "1024",
-            "client_member_sn": "lip-p-David",
-            "card_number": "20014057378",
+            "brand_code": "1043",
+            "client_member_sn": "Amber-Owens072531",
+            "card_number": "20015231943",
             "page_size": "15",
             "page": "1"
         }

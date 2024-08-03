@@ -4,6 +4,7 @@ import queue
 import time
 
 import requests
+from jsonpath import jsonpath
 from locust.env import Environment
 from locust import SequentialTaskSet, task, events, LoadTestShape, FastHttpUser
 from locust.runners import MasterRunner, WorkerRunner
@@ -23,15 +24,25 @@ class GiftedRecordTaskSet(SequentialTaskSet):
         biz_body = {
             "brand_code": "1024",
             "client_member_sn": "wenjie",
+            "card_number": "20013900078"
         }
         body = self.auth.signature(biz_body)
-        with self.client.post(endpoint, headers=headers, json=body, catch_response=True) as resp:
-            if resp.status_code == 200:
-                pid = os.getpid()
-                print(f'[{self.runner_info}] -- {json.loads(resp.request.body)}')
-                print(f'[{self.runner_info}] -- {resp.text}')
-        self.interrupt()
+        with self.client.post(endpoint, headers=headers, json=body, catch_response=True) as response:
+            if response.status_code != 200:
+                print(f'[{self.runner_info}] -- {json.loads(response.request.body)}')
+                print(f'[{self.runner_info}] -- {response.text}')
+                response.failure(f"通讯异常!!! 通讯状态码: {response.status_code}")
+                return
 
+            resp = response.json()
+            # print(resp)
+            result_code = jsonpath(resp, "$.response.body.result_code.biz_response.result_code")
+            error_code = jsonpath(resp, "$.response.body.result_code.biz_response.error_code")
+            if result_code == '400' and error_code == 'W.COMMON.SYSTEM_ERROR':
+                response.failure(f"业务异常: {response.text}")
+                return
+
+        self.interrupt()
 
 class GiftedRecordUser(FastHttpUser):
     tasks = [GiftedRecordTaskSet]
@@ -101,8 +112,6 @@ def locust_environment_init(environment: Environment, **kwargs):
     runner_info = None
     if isinstance(runner, MasterRunner):
         runner_info = f'{role}-pid:{pid}'
-        # for i in range(num_users):
-        #     global_data_queue.put(i)
         print("This is the master node.")
         environment.shape_class = CustomLoadTestShape(
             max_user_num=600,
@@ -121,11 +130,6 @@ def locust_environment_init(environment: Environment, **kwargs):
 
 @events.test_start.add_listener
 def on_test_start(environment, **kwargs):
-    # 如果有 LoadTestShape 子类的时候，才会有值
-    # shape_class = environment.shape_class
-    #
-    # print(shape_class.__dict__)
-    '''执行数据准备'''
     pid = os.getpid()
     print(f"----------------[{pid}]测试开始执行-----------------👌👌👌👌👌👌👌👌👌👌👌👌👌👌👌👌👌👌👌👌👌👌👌👌👌👌👌👌👌👌")
 
